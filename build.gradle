@@ -1,100 +1,75 @@
 plugins {
-    id 'fabric-loom' version '1.3-SNAPSHOT'
-    id 'maven-publish'
-    id 'org.ajoberstar.grgit' version '4.1.0'
+    alias libs.plugins.fabric.loom
+    id "maven-publish"
 }
 
-def getVersionMetadata() {
-    // CI builds version numbers
-    def build_id = System.getenv("RELEASE_NUMBER")
-    if (build_id != null) {
-        return build_id + ".0.0"
-    }
+version = "$mod_version+$target_version"
+group = maven_group
 
-    // Development builds
-    if (grgit == null) {
-        return "dev"
-    }
-
-    // Named development builds
-    def id = grgit.head().abbreviatedId
-    if (!grgit.status().clean) {
-        id += "-dirty"
-    }
-
-    return "rev.${id}"
+base {
+    archivesName = archives_name
 }
-
-archivesBaseName = "${project.mod_id}-${project.minecraft_version}"
-version = "${getVersionMetadata()}"
-group = project.maven_group
 
 repositories {
-    // Add repositories to retrieve artifacts from in here.
-    // You should only use this when depending on other mods because
-    // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-    // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-    // for more information about repositories.
+    maven { url "https://jitpack.io" }
+}
+
+loom {
+    decompilers {
+        vineflower {
+            options.putAll(["mark-corresponding-synthetics": "1", "indent-string": "    "])
+        }
+    }
+    mixin {
+        useLegacyMixinAp = false
+    }
+    runs {
+        client {
+            client()
+            getJvmArguments().addAll(
+                    "-Dorg.lwjgl.glfw.libname=/home/justin/download/libglfw-x86_64.so",
+                    "-javaagent:/home/justin/.cache/gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.17.5+mixin.0.8.7/cef8519a91129d0c21fa03bb9378f0e8ca810e5/sponge-mixin-0.17.5+mixin.0.8.7.jar"
+            )
+            getEnvironmentVars().put("__GL_THREADED_OPTIMIZATIONS", "0")
+        }
+    }
 }
 
 dependencies {
-    // To change the versions see the gradle.properties file
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    minecraft libs.minecraft
+    mappings variantOf(libs.yarn.mappings) { classifier "v2" }
+    modImplementation libs.fabric.loader
 }
 
 processResources {
-    inputs.property "mod_id", project.mod_id
-    inputs.property "version", project.version
-    inputs.property "minecraft_version", project.minecraft_version
-    filteringCharset "UTF-8"
+    def tokens = [
+            version: project.version,
+            minecraft_version: project.target_version
+    ]
+    inputs.properties tokens
 
     filesMatching("fabric.mod.json") {
-        expand "mod_id": project.mod_id,
-                "version": project.version,
-                "minecraft_version": project.minecraft_version
+        expand tokens
     }
 }
 
-def targetJavaVersion = 8
 tasks.withType(JavaCompile).configureEach {
-    // ensure that the encoding is set to UTF-8, no matter what the system default is
-    // this fixes some edge cases with special characters not displaying correctly
-    // see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
-    // If Javadoc is generated, this must be specified in that task too.
     it.options.encoding = "UTF-8"
-    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
-        it.options.release = targetJavaVersion
-    }
+    it.options.release.set(8)
 }
 
 java {
-    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
-    if (JavaVersion.current() < javaVersion) {
-        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
-    }
+    sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
+    withSourcesJar()
 }
 
 jar {
-    from("LICENSE") {
-        rename { "${it}_${archivesBaseName}"}
-    }
+    from "LICENSE"
 }
 
-// configure the maven publication
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-        }
+    publications.create("mavenJava", MavenPublication) {
+        from components.java
     }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-    repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
-    }
+    repositories {}
 }
