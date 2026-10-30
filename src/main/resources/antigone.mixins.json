@@ -4,9 +4,14 @@
   "package": "me.char321.antigone.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
+    "CatEntityMixin",
     "StriderEntityMixin"
   ],
   "injectors": {
     "defaultRequire": 1
+  },
+  "overwrites": {
+    "conformVisibility": true,
+    "requireAnnotations": true
   }
 }
